@@ -1,0 +1,16 @@
+{
+  "generatedAt": "2026-09-15T12:52:50.068Z",
+  "storefront": "https://www.pepstores.com",
+  "qualifyingCollections": 2,
+  "totalUrls": 6,
+  "shards": 1,
+  "excludedTagOccurrences": 6,
+  "excludedSample": [
+    "42",
+    "R199",
+    "Sale",
+    "Size:6",
+    "brand:Reebok",
+    "colour:Red"
+  ]
+}

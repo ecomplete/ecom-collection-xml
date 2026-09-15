@@ -1,0 +1,55 @@
+{
+  "//": "Mirrors the Bulk-Operation node shape. Used by SITEMAP_FETCH_MODE=mock for offline testing.",
+  "collections": [
+    {
+      "id": "gid://shopify/Collection/1",
+      "handle": "women-shoes-boots-heels",
+      "updatedAt": "2026-09-10T08:00:00Z",
+      "publishedOnCurrentPublication": true,
+      "tier1": { "value": "Women" },
+      "tier2": { "value": "Shoes" },
+      "tier3": { "value": "Boots & Heels" },
+      "products": [
+        { "status": "ACTIVE", "publishedOnCurrentPublication": true, "tags": ["High Heels", "Ankle Boots", "colour:Red", "Size:6", "Sale"] },
+        { "status": "ACTIVE", "publishedOnCurrentPublication": true, "tags": ["High Heels", "Stilettos", "Men's"] },
+        { "status": "DRAFT",  "publishedOnCurrentPublication": true, "tags": ["Should Not Appear Draft"] }
+      ]
+    },
+    {
+      "id": "gid://shopify/Collection/2",
+      "handle": "men-clothing-jackets",
+      "updatedAt": "2026-09-12T10:30:00Z",
+      "publishedOnCurrentPublication": true,
+      "tier1": { "value": "Men" },
+      "tier2": { "value": "Clothing" },
+      "tier3": { "value": "Jackets" },
+      "products": [
+        { "status": "ACTIVE", "publishedOnCurrentPublication": true, "tags": ["Puffer", "Denim Jacket", "R199", "brand:Reebok", "42"] }
+      ]
+    },
+    {
+      "id": "gid://shopify/Collection/3",
+      "handle": "not-a-tier-collection",
+      "updatedAt": "2026-09-01T00:00:00Z",
+      "publishedOnCurrentPublication": true,
+      "tier1": { "value": "Only tier 1 set" },
+      "tier2": { "value": "" },
+      "tier3": null,
+      "products": [
+        { "status": "ACTIVE", "publishedOnCurrentPublication": true, "tags": ["Ignore Me"] }
+      ]
+    },
+    {
+      "id": "gid://shopify/Collection/4",
+      "handle": "unpublished-tier-collection",
+      "updatedAt": "2026-09-01T00:00:00Z",
+      "publishedOnCurrentPublication": false,
+      "tier1": { "value": "Women" },
+      "tier2": { "value": "Accessories" },
+      "tier3": { "value": "Bags" },
+      "products": [
+        { "status": "ACTIVE", "publishedOnCurrentPublication": true, "tags": ["Tote"] }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "//": "Non-secret configuration. Secrets (store domain, admin token) come from env / GitHub secrets.",
+
+  "tierMetafields": {
+    "namespace": "custom",
+    "keys": ["collection_1st_tier", "collection_2nd_tier", "collection_3rd_tier"]
+  },
+
+  "//requireAllTiers": "true  -> a collection qualifies only when ALL three tier metafields are non-empty.  false -> any one is enough.",
+  "requireAllTiers": true,
+
+  "//onlyPublished": "Only include collections and products published to the Online Store sales channel.",
+  "onlyPublishedCollections": true,
+  "onlyActiveProducts": true,
+
+  "sitemap": {
+    "//urlsPerFile": "Max <url> entries per shard. Spec cap is 50000; 45000 leaves headroom.",
+    "urlsPerFile": 45000,
+    "//gzip": "Write .xml.gz alongside .xml. Leave false while inspecting output on GitHub; turn on for hosting.",
+    "gzip": false,
+    "indexFileName": "sitemap-index.xml",
+    "shardPrefix": "sitemap-level4"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "pep-level4-sitemap",
+  "version": "0.1.0",
+  "description": "Daily generator for a Shopify level-4 (tag-filtered collection) XML sitemap.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node src/build-sitemap.js",
+    "validate": "node src/validate.js",
+    "build:mock": "SITEMAP_FETCH_MODE=mock node src/build-sitemap.js",
+    "test": "node --test"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

@@ -1,0 +1,32 @@
+{
+  "//": "Tags matched here are NOT turned into level-4 URLs. Matching runs on the RAW tag, case-insensitive, BEFORE handleizing.",
+
+  "//exact": "Whole-tag matches (case-insensitive). Add your merchandising / filter-facet tags here.",
+  "exact": [
+    "sale",
+    "new",
+    "new-in",
+    "clearance",
+    "featured",
+    "bestseller",
+    "best-seller"
+  ],
+
+  "//prefix": "Any raw tag starting with one of these (case-insensitive) is excluded. Great for namespaced filter facets.",
+  "prefix": [
+    "color:",
+    "colour:",
+    "size:",
+    "price:",
+    "brand:",
+    "material:",
+    "gender:",
+    "_"
+  ],
+
+  "//regex": "JavaScript regex source strings, tested (case-insensitive) against the raw tag. Defaults strip pure numbers and 'R199'-style price tags.",
+  "regex": [
+    "^\\d+([.,]\\d+)?$",
+    "^r\\s?\\d+([.,]\\d+)?$"
+  ]
+}
