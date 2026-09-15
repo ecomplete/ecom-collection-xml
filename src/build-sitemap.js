@@ -1,19 +1,18 @@
-// Orchestrates: fetch data -> build URLs -> shard -> write sitemap + index + report.
+// Orchestrates: fetch collections -> build grouped URLs -> shard -> write sitemap + index + report.
+//
+// Output layout: every published collection URL, grouped. For a qualifying (3rd-tier)
+// collection, its 4th-tier tag URLs are listed directly beneath it. Each group is
+// preceded by an XML comment (the tier breadcrumb, or the handle) for readability.
 //
 // Required env:
-//   STOREFRONT_DOMAIN      host used in <loc>, e.g. www.pepstores.com  (no scheme, no trailing slash)
-// For live modes also:
-//   SHOPIFY_STORE_DOMAIN   admin host, e.g. your-store.myshopify.com
-//   SHOPIFY_ADMIN_TOKEN    Admin API access token (scope: read_products)
-// Optional:
-//   SHOPIFY_API_VERSION    default 2025-07
-//   SITEMAP_FETCH_MODE     bulk (default) | paginated | mock
-//   OUTPUT_DIR             default dist
+//   STOREFRONT_DOMAIN      host used in <loc>, e.g. www.pepstores.com
+// For live modes also: SHOPIFY_STORE_DOMAIN, SHOPIFY_ADMIN_TOKEN
+// Optional: SHOPIFY_API_VERSION, SITEMAP_FETCH_MODE (bulk|paginated|mock), OUTPUT_DIR
 
 import { readFile, mkdir, writeFile, rm } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import path from "node:path";
-import { fetchQualifyingCollections } from "./shopify.js";
+import { fetchCollections } from "./shopify.js";
 import { buildExcluder } from "./exclusions.js";
 import { handleize } from "./handleize.js";
 
@@ -25,14 +24,12 @@ function xmlEscape(s) {
     .replace(/"/g, "&quot;").replace(/'/g, "&apos;");
 }
 
-function chunk(arr, size) {
-  const out = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
 async function loadJson(rel) {
   return JSON.parse(await readFile(new URL(rel, import.meta.url), "utf8"));
+}
+
+function urlBlock(loc, lastmod) {
+  return `  <url>\n    <loc>${xmlEscape(loc)}</loc>\n    <lastmod>${xmlEscape(lastmod)}</lastmod>\n  </url>`;
 }
 
 async function main() {
@@ -42,64 +39,92 @@ async function main() {
 
   const storefront = (process.env.STOREFRONT_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
   if (!storefront) throw new Error("STOREFRONT_DOMAIN is required (e.g. www.pepstores.com).");
-
-  const outDir = process.env.OUTPUT_DIR || "dist";
   const base = `https://${storefront}`;
+  const outDir = process.env.OUTPUT_DIR || "dist";
 
-  log(`Building level-4 sitemap for ${base}`);
-  const collections = await fetchQualifyingCollections(settings, log);
-  log(`Qualifying collections: ${collections.length}`);
+  log(`Building sitemap for ${base}`);
+  const collections = await fetchCollections(settings, log);
+  log(`Published collections: ${collections.length}`);
 
-  // Build URL records: one per (collection, non-excluded tag), deduped.
+  // Build one group per collection: [comment, ...urlBlocks].
+  collections.sort((a, b) => (a.handle < b.handle ? -1 : a.handle > b.handle ? 1 : 0));
+
   const seen = new Set();
-  const records = [];
-  let excludedCount = 0;
+  const groups = []; // { comment, blocks:[string], count:number }
+  let collectionUrls = 0, tagUrls = 0, excludedCount = 0, qualifying = 0;
   const excludedSample = new Set();
 
   for (const col of collections) {
     const lastmod = col.updatedAt || new Date().toISOString();
-    for (const rawTag of col.productTags) {
-      if (isExcluded(rawTag)) {
-        excludedCount++;
-        if (excludedSample.size < 100) excludedSample.add(rawTag);
-        continue;
-      }
-      const tagHandle = handleize(rawTag);
-      if (!tagHandle) continue;
-      const loc = `${base}/collections/${col.handle}/${tagHandle}`;
-      if (seen.has(loc)) continue;
-      seen.add(loc);
-      records.push({ loc, lastmod });
+    const blocks = [];
+
+    // 3rd-tier (or any) collection's own URL.
+    const colLoc = `${base}/collections/${col.handle}`;
+    if (!seen.has(colLoc)) {
+      seen.add(colLoc);
+      blocks.push(urlBlock(colLoc, lastmod));
+      collectionUrls++;
     }
+
+    // 4th-tier tag URLs, only for qualifying collections.
+    if (col.qualifies) {
+      qualifying++;
+      const tagLocs = [];
+      for (const rawTag of col.productTags) {
+        if (isExcluded(rawTag)) {
+          excludedCount++;
+          if (excludedSample.size < 100) excludedSample.add(rawTag);
+          continue;
+        }
+        const h = handleize(rawTag);
+        if (!h) continue;
+        const loc = `${base}/collections/${col.handle}/${h}`;
+        if (seen.has(loc)) continue;
+        seen.add(loc);
+        tagLocs.push(loc);
+      }
+      tagLocs.sort();
+      for (const loc of tagLocs) { blocks.push(urlBlock(loc, lastmod)); tagUrls++; }
+    }
+
+    if (blocks.length === 0) continue;
+    const label = col.qualifies && col.breadcrumb.some(Boolean)
+      ? col.breadcrumb.filter(Boolean).join(" > ")
+      : col.handle;
+    groups.push({ comment: `  <!-- ${xmlEscape(label)} -->`, blocks, count: blocks.length });
   }
 
-  // Deterministic order -> stable diffs.
-  records.sort((a, b) => (a.loc < b.loc ? -1 : a.loc > b.loc ? 1 : 0));
-  log(`Level-4 URLs: ${records.length}  (excluded tag-occurrences: ${excludedCount})`);
+  const totalUrls = collectionUrls + tagUrls;
+  log(`URLs: ${totalUrls} (${collectionUrls} collections + ${tagUrls} 4th-tier). ` +
+      `Qualifying: ${qualifying}. Excluded tag-occurrences: ${excludedCount}.`);
 
-  // Fresh output dir.
+  // Pack groups into shards without splitting a group (unless a single group exceeds the cap).
+  const perFile = settings.sitemap.urlsPerFile || 45000;
+  const shards = [];
+  let cur = [], curCount = 0;
+  for (const g of groups) {
+    if (curCount > 0 && curCount + g.count > perFile) { shards.push(cur); cur = []; curCount = 0; }
+    cur.push(g); curCount += g.count;
+  }
+  if (cur.length || shards.length === 0) shards.push(cur);
+
   await rm(outDir, { recursive: true, force: true });
   await mkdir(outDir, { recursive: true });
 
-  const perFile = settings.sitemap.urlsPerFile || 45000;
-  const shards = records.length ? chunk(records, perFile) : [[]];
   const shardFiles = [];
-
   for (let i = 0; i < shards.length; i++) {
     const name = `${settings.sitemap.shardPrefix}-${i + 1}.xml`;
+    const inner = shards[i].map((g) => `${g.comment}\n${g.blocks.join("\n")}`).join("\n\n");
     const body =
       `<?xml version="1.0" encoding="UTF-8"?>\n` +
       `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-      shards[i].map((r) =>
-        `  <url>\n    <loc>${xmlEscape(r.loc)}</loc>\n    <lastmod>${xmlEscape(r.lastmod)}</lastmod>\n  </url>`
-      ).join("\n") +
+      inner +
       `\n</urlset>\n`;
     await writeFile(path.join(outDir, name), body, "utf8");
     if (settings.sitemap.gzip) await writeFile(path.join(outDir, name + ".gz"), gzipSync(body));
     shardFiles.push(name);
   }
 
-  // Sitemap index.
   const now = new Date().toISOString();
   const indexBody =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -110,12 +135,14 @@ async function main() {
     `\n</sitemapindex>\n`;
   await writeFile(path.join(outDir, settings.sitemap.indexFileName), indexBody, "utf8");
 
-  // Machine-readable report (used by validate.js drift guard + for humans).
   const report = {
     generatedAt: now,
     storefront: base,
-    qualifyingCollections: collections.length,
-    totalUrls: records.length,
+    publishedCollections: collections.length,
+    qualifyingCollections: qualifying,
+    collectionUrls,
+    fourthTierUrls: tagUrls,
+    totalUrls,
     shards: shardFiles.length,
     excludedTagOccurrences: excludedCount,
     excludedSample: [...excludedSample].sort(),
@@ -123,7 +150,7 @@ async function main() {
   await writeFile(path.join(outDir, "report.json"), JSON.stringify(report, null, 2), "utf8");
 
   log(`Wrote ${shardFiles.length} shard(s) + ${settings.sitemap.indexFileName} to ${outDir}/`);
-  log(`Report: ${JSON.stringify(report, null, 2)}`);
+  log(JSON.stringify(report, null, 2));
 }
 
 main().catch((e) => {

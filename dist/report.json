@@ -1,8 +1,11 @@
 {
-  "generatedAt": "2026-09-15T12:52:50.068Z",
+  "generatedAt": "2026-09-15T13:13:54.898Z",
   "storefront": "https://www.pepstores.com",
+  "publishedCollections": 5,
   "qualifyingCollections": 2,
-  "totalUrls": 6,
+  "collectionUrls": 5,
+  "fourthTierUrls": 6,
+  "totalUrls": 11,
   "shards": 1,
   "excludedTagOccurrences": 6,
   "excludedSample": [

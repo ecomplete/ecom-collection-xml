@@ -13,6 +13,9 @@
   "onlyPublishedCollections": true,
   "onlyActiveProducts": true,
 
+  "//publicationName": "Sales channel checked for 'published'. Needs read_publications scope; if unavailable, the build falls back to the app's current-publication check and logs a warning.",
+  "publicationName": "Online Store",
+
   "sitemap": {
     "//urlsPerFile": "Max <url> entries per shard. Spec cap is 50000; 45000 leaves headroom.",
     "urlsPerFile": 45000,

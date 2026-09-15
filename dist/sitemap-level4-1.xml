@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- gift-cards -->
+  <url>
+    <loc>https://www.pepstores.com/collections/gift-cards</loc>
+    <lastmod>2026-09-01T00:00:00Z</lastmod>
+  </url>
+
+  <!-- Men &gt; Clothing &gt; Jackets -->
+  <url>
+    <loc>https://www.pepstores.com/collections/men-clothing-jackets</loc>
+    <lastmod>2026-09-12T10:30:00Z</lastmod>
+  </url>
   <url>
     <loc>https://www.pepstores.com/collections/men-clothing-jackets/denim-jacket</loc>
     <lastmod>2026-09-12T10:30:00Z</lastmod>
@@ -7,6 +18,24 @@
   <url>
     <loc>https://www.pepstores.com/collections/men-clothing-jackets/puffer</loc>
     <lastmod>2026-09-12T10:30:00Z</lastmod>
+  </url>
+
+  <!-- women -->
+  <url>
+    <loc>https://www.pepstores.com/collections/women</loc>
+    <lastmod>2026-09-05T08:00:00Z</lastmod>
+  </url>
+
+  <!-- women-shoes -->
+  <url>
+    <loc>https://www.pepstores.com/collections/women-shoes</loc>
+    <lastmod>2026-09-06T08:00:00Z</lastmod>
+  </url>
+
+  <!-- Women &gt; Shoes &gt; Boots &amp; Heels -->
+  <url>
+    <loc>https://www.pepstores.com/collections/women-shoes-boots-heels</loc>
+    <lastmod>2026-09-10T08:00:00Z</lastmod>
   </url>
   <url>
     <loc>https://www.pepstores.com/collections/women-shoes-boots-heels/ankle-boots</loc>

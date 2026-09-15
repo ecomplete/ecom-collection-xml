@@ -2,6 +2,22 @@
   "//": "Mirrors the Bulk-Operation node shape. Used by SITEMAP_FETCH_MODE=mock for offline testing.",
   "collections": [
     {
+      "id": "gid://shopify/Collection/10",
+      "handle": "women",
+      "updatedAt": "2026-09-05T08:00:00Z",
+      "publishedOnCurrentPublication": true,
+      "tier1": { "value": "" }, "tier2": { "value": "" }, "tier3": { "value": "" },
+      "products": []
+    },
+    {
+      "id": "gid://shopify/Collection/11",
+      "handle": "women-shoes",
+      "updatedAt": "2026-09-06T08:00:00Z",
+      "publishedOnCurrentPublication": true,
+      "tier1": { "value": "" }, "tier2": { "value": "" }, "tier3": { "value": "" },
+      "products": []
+    },
+    {
       "id": "gid://shopify/Collection/1",
       "handle": "women-shoes-boots-heels",
       "updatedAt": "2026-09-10T08:00:00Z",
@@ -29,14 +45,12 @@
     },
     {
       "id": "gid://shopify/Collection/3",
-      "handle": "not-a-tier-collection",
+      "handle": "gift-cards",
       "updatedAt": "2026-09-01T00:00:00Z",
       "publishedOnCurrentPublication": true,
-      "tier1": { "value": "Only tier 1 set" },
-      "tier2": { "value": "" },
-      "tier3": null,
+      "tier1": { "value": "" }, "tier2": { "value": "" }, "tier3": { "value": "" },
       "products": [
-        { "status": "ACTIVE", "publishedOnCurrentPublication": true, "tags": ["Ignore Me"] }
+        { "status": "ACTIVE", "publishedOnCurrentPublication": true, "tags": ["Ignore Me (non-qualifying, no tags emitted)"] }
       ]
     },
     {

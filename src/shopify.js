@@ -1,13 +1,13 @@
-// Data layer: pulls qualifying collections + their product tags out of Shopify.
+// Data layer: pulls collections (+ product tags for qualifying ones) out of Shopify.
 //
-// Three modes (env SITEMAP_FETCH_MODE):
+// Modes (env SITEMAP_FETCH_MODE):
 //   bulk       (default) - one async Bulk Operation, download JSONL. Best at scale.
 //   paginated            - loop collections + products via GraphQL. Reliable, more calls.
 //   mock                 - read test/mock-data.json. No network, for local testing.
 //
-// Returns a normalized array:
-//   [{ handle, updatedAt, productTags: Set<string> }, ...]
-// already filtered to qualifying + published collections.
+// Returns a normalized array of ALL published collections:
+//   [{ handle, updatedAt, published, qualifies, breadcrumb:[t1,t2,t3], productTags:Set }]
+// Only qualifying collections (all three tier metafields set) carry productTags.
 
 import { readFile } from "node:fs/promises";
 
@@ -39,27 +39,63 @@ async function gql(query, variables = {}) {
   return json;
 }
 
-// ---- helpers shared across modes ---------------------------------------------
+// ---- shared normalization ----------------------------------------------------
 
-function collectionQualifies(node, settings) {
-  const keys = settings.tierMetafields.keys;
-  const values = keys.map((_, i) => node[`tier${i + 1}`]?.value?.trim());
-  const populated = values.map((v) => !!v);
-  const qualifies = settings.requireAllTiers ? populated.every(Boolean) : populated.some(Boolean);
-  if (!qualifies) return false;
-  if (settings.onlyPublishedCollections && node.publishedOnCurrentPublication === false) return false;
+function tierValues(node, settings) {
+  return settings.tierMetafields.keys.map((_, i) => node[`tier${i + 1}`]?.value?.trim() || "");
+}
+
+function qualifies(node, settings) {
+  const populated = tierValues(node, settings).map((v) => !!v);
+  return settings.requireAllTiers ? populated.every(Boolean) : populated.some(Boolean);
+}
+
+// Prefer the explicit Online Store publication check when we requested it (`pub`);
+// otherwise fall back to the app's current publication.
+function isPublished(node) {
+  return node.pub !== undefined && node.pub !== null ? node.pub : node.publishedOnCurrentPublication;
+}
+
+function productCounts(product, settings) {
+  if (settings.onlyActiveProducts && product.status && product.status !== "ACTIVE") return false;
+  if (settings.onlyPublishedCollections && isPublished(product) === false) return false;
   return true;
 }
 
-function productCountsForTags(product, settings) {
-  if (settings.onlyActiveProducts && product.status && product.status !== "ACTIVE") return false;
-  if (settings.onlyPublishedCollections && product.publishedOnCurrentPublication === false) return false;
-  return true;
+function normalizeCollection(node, settings) {
+  return {
+    handle: node.handle,
+    updatedAt: node.updatedAt,
+    published: isPublished(node) !== false, // treat unknown as published
+    qualifies: qualifies(node, settings),
+    breadcrumb: tierValues(node, settings),
+    productTags: new Set(),
+  };
+}
+
+// ---- Online Store publication id (optional, best-effort) ---------------------
+
+async function getOnlineStorePublicationId(settings, log) {
+  const wantName = settings.publicationName || "Online Store";
+  try {
+    const r = await gql(`{ publications(first: 50) { edges { node { id name } } } }`);
+    const hit = r.data.publications.edges.find((e) => e.node.name === wantName);
+    if (hit) { log(`Online Store publication: ${hit.node.id}`); return hit.node.id; }
+    log(`Publication "${wantName}" not found; falling back to current-publication check.`);
+  } catch (e) {
+    log(`Could not read publications (${e.message.split("\n")[0]}); ` +
+        `falling back to current-publication check. Add read_publications scope for accuracy.`);
+  }
+  return null;
 }
 
 // ---- BULK mode ---------------------------------------------------------------
 
-const BULK_QUERY = `
+function buildBulkQuery(settings, pubId) {
+  const ns = settings.tierMetafields.namespace;
+  const [k1, k2, k3] = settings.tierMetafields.keys;
+  const pubField = pubId ? `pub: publishedOnPublication(publicationId: "${pubId}")` : "";
+  return `
 {
   collections {
     edges { node {
@@ -67,25 +103,27 @@ const BULK_QUERY = `
       handle
       updatedAt
       publishedOnCurrentPublication
-      tier1: metafield(namespace: "%NS%", key: "%K1%") { value }
-      tier2: metafield(namespace: "%NS%", key: "%K2%") { value }
-      tier3: metafield(namespace: "%NS%", key: "%K3%") { value }
+      ${pubField}
+      tier1: metafield(namespace: "${ns}", key: "${k1}") { value }
+      tier2: metafield(namespace: "${ns}", key: "${k2}") { value }
+      tier3: metafield(namespace: "${ns}", key: "${k3}") { value }
       products {
         edges { node {
           id
           status
           publishedOnCurrentPublication
+          ${pubField}
           tags
         } }
       }
     } }
   }
 }`;
+}
 
 async function runBulk(settings, log) {
-  const ns = settings.tierMetafields.namespace;
-  const [k1, k2, k3] = settings.tierMetafields.keys;
-  const inner = BULK_QUERY.replace(/%NS%/g, ns).replace("%K1%", k1).replace("%K2%", k2).replace("%K3%", k3);
+  const pubId = await getOnlineStorePublicationId(settings, log);
+  const inner = buildBulkQuery(settings, pubId);
 
   const start = await gql(`
     mutation ($q: String!) {
@@ -99,14 +137,12 @@ async function runBulk(settings, log) {
   if (errs.length) {
     throw new Error(
       `Bulk operation rejected: ${JSON.stringify(errs)}\n` +
-      `If a field (e.g. metafield args or publishedOnCurrentPublication) is not allowed in bulk ` +
-      `on API ${API_VERSION}, set SITEMAP_FETCH_MODE=paginated.`
+      `If a field is not allowed in bulk on API ${API_VERSION}, set SITEMAP_FETCH_MODE=paginated.`
     );
   }
 
-  // poll
   let url = null;
-  for (let i = 0; i < 240; i++) { // up to ~40 min at 10s
+  for (let i = 0; i < 240; i++) {
     await sleep(10000);
     const cur = await gql(`{ currentBulkOperation { id status errorCode objectCount url } }`);
     const op = cur.data.currentBulkOperation;
@@ -123,16 +159,14 @@ async function runBulk(settings, log) {
 }
 
 function parseBulkJsonl(jsonl, settings) {
-  // JSONL: collection lines (id gid://shopify/Collection/...) and product lines
-  // (have __parentId pointing at their collection).
-  const collections = new Map(); // id -> node
-  const productsByParent = new Map(); // parentId -> [product,...]
+  const collections = new Map();     // id -> normalized collection
+  const productsByParent = new Map(); // collectionId -> [productNode]
 
   for (const line of jsonl.split("\n")) {
     if (!line.trim()) continue;
     const obj = JSON.parse(line);
     if (typeof obj.id === "string" && obj.id.includes("/Collection/")) {
-      collections.set(obj.id, obj);
+      collections.set(obj.id, { node: obj, norm: normalizeCollection(obj, settings) });
     } else if (obj.__parentId) {
       if (!productsByParent.has(obj.__parentId)) productsByParent.set(obj.__parentId, []);
       productsByParent.get(obj.__parentId).push(obj);
@@ -140,14 +174,15 @@ function parseBulkJsonl(jsonl, settings) {
   }
 
   const out = [];
-  for (const [id, node] of collections) {
-    if (!collectionQualifies(node, settings)) continue;
-    const tags = new Set();
-    for (const p of productsByParent.get(id) || []) {
-      if (!productCountsForTags(p, settings)) continue;
-      for (const t of p.tags || []) tags.add(t);
+  for (const [id, { norm }] of collections) {
+    if (settings.onlyPublishedCollections && norm.published === false) continue;
+    if (norm.qualifies) {
+      for (const p of productsByParent.get(id) || []) {
+        if (!productCounts(p, settings)) continue;
+        for (const t of p.tags || []) norm.productTags.add(t);
+      }
     }
-    out.push({ handle: node.handle, updatedAt: node.updatedAt, productTags: tags });
+    out.push(norm);
   }
   return out;
 }
@@ -155,8 +190,10 @@ function parseBulkJsonl(jsonl, settings) {
 // ---- PAGINATED mode ----------------------------------------------------------
 
 async function runPaginated(settings, log) {
+  const pubId = await getOnlineStorePublicationId(settings, log);
   const ns = settings.tierMetafields.namespace;
   const [k1, k2, k3] = settings.tierMetafields.keys;
+  const pubField = pubId ? `pub: publishedOnPublication(publicationId: "${pubId}")` : "";
   const out = [];
   let after = null;
 
@@ -166,7 +203,7 @@ async function runPaginated(settings, log) {
         collections(first: 100, after: $after) {
           pageInfo { hasNextPage endCursor }
           edges { node {
-            id handle updatedAt publishedOnCurrentPublication
+            id handle updatedAt publishedOnCurrentPublication ${pubField}
             tier1: metafield(namespace: "${ns}", key: "${k1}") { value }
             tier2: metafield(namespace: "${ns}", key: "${k2}") { value }
             tier3: metafield(namespace: "${ns}", key: "${k3}") { value }
@@ -176,10 +213,11 @@ async function runPaginated(settings, log) {
     const page = await gql(q, { after });
     const conn = page.data.collections;
     for (const { node } of conn.edges) {
-      if (!collectionQualifies(node, settings)) continue;
-      const tags = await collectTagsForCollection(node.id, settings);
-      out.push({ handle: node.handle, updatedAt: node.updatedAt, productTags: tags });
-      log(`  ${node.handle}: ${tags.size} tag(s)`);
+      const norm = normalizeCollection(node, settings);
+      if (settings.onlyPublishedCollections && norm.published === false) continue;
+      if (norm.qualifies) norm.productTags = await collectTags(node.id, settings, pubField);
+      out.push(norm);
+      log(`  ${norm.handle}${norm.qualifies ? ` (${norm.productTags.size} tag[s])` : ""}`);
     }
     if (!conn.pageInfo.hasNextPage) break;
     after = conn.pageInfo.endCursor;
@@ -187,7 +225,7 @@ async function runPaginated(settings, log) {
   return out;
 }
 
-async function collectTagsForCollection(collectionId, settings) {
+async function collectTags(collectionId, settings, pubField) {
   const tags = new Set();
   let after = null;
   for (;;) {
@@ -196,17 +234,16 @@ async function collectTagsForCollection(collectionId, settings) {
         collection(id: $id) {
           products(first: 250, after: $after) {
             pageInfo { hasNextPage endCursor }
-            edges { node { status publishedOnCurrentPublication tags } }
+            edges { node { status publishedOnCurrentPublication ${pubField} tags } }
           }
         }
       }`;
     const page = await gql(q, { id: collectionId, after });
     const conn = page.data.collection.products;
     for (const { node } of conn.edges) {
-      if (!productCountsForTags(node, settings)) continue;
+      if (!productCounts(node, settings)) continue;
       for (const t of node.tags || []) tags.add(t);
     }
-    // cost-based backoff
     const cost = page.extensions?.cost?.throttleStatus;
     if (cost && cost.currentlyAvailable < 200) await sleep(1500);
     if (!conn.pageInfo.hasNextPage) break;
@@ -219,22 +256,24 @@ async function collectTagsForCollection(collectionId, settings) {
 
 async function runMock(settings) {
   const raw = JSON.parse(await readFile(new URL("../test/mock-data.json", import.meta.url), "utf8"));
-  // mock-data mirrors the bulk node shape
-  return raw.collections
-    .filter((c) => collectionQualifies(c, settings))
-    .map((c) => {
-      const tags = new Set();
+  const out = [];
+  for (const c of raw.collections) {
+    const norm = normalizeCollection(c, settings);
+    if (settings.onlyPublishedCollections && norm.published === false) continue;
+    if (norm.qualifies) {
       for (const p of c.products || []) {
-        if (!productCountsForTags(p, settings)) continue;
-        for (const t of p.tags || []) tags.add(t);
+        if (!productCounts(p, settings)) continue;
+        for (const t of p.tags || []) norm.productTags.add(t);
       }
-      return { handle: c.handle, updatedAt: c.updatedAt, productTags: tags };
-    });
+    }
+    out.push(norm);
+  }
+  return out;
 }
 
 // ---- entry -------------------------------------------------------------------
 
-export async function fetchQualifyingCollections(settings, log = () => {}) {
+export async function fetchCollections(settings, log = () => {}) {
   const mode = process.env.SITEMAP_FETCH_MODE || "bulk";
   log(`Fetch mode: ${mode}`);
   if (mode === "mock") return runMock(settings);
@@ -242,4 +281,4 @@ export async function fetchQualifyingCollections(settings, log = () => {}) {
   return runBulk(settings, log);
 }
 
-export default fetchQualifyingCollections;
+export default fetchCollections;

@@ -13,15 +13,22 @@ Runs daily on GitHub Actions, commits the generated files back into the repo
 
 ## How it works
 
-1. Pulls every collection with the three tier metafields populated
-   (`custom.collection_1st_tier/2nd/3rd`), plus the product tags in each.
-2. Turns each **non-excluded** product tag into
+1. Pulls **every published collection** in the store.
+2. For collections that have all three tier metafields populated
+   (`custom.collection_1st_tier/2nd/3rd`) — the "3rd-tier" collections — it also reads
+   their product tags and turns each **non-excluded** tag into a 4th-tier URL
    `https://{STOREFRONT_DOMAIN}/collections/{handle}/{handleized-tag}`.
-3. Deduplicates, sorts, shards (≤45k URLs/file), and writes a sitemap index.
-4. Validates the output, then commits `dist/` back to the repo.
+3. Writes the sitemap **grouped**: each collection's own URL, with its 4th-tier URLs
+   listed directly beneath it, preceded by a comment showing the tier breadcrumb.
+4. Deduplicates, shards (≤45k URLs/file, groups kept intact), writes a sitemap index.
+5. Validates the output, then commits `dist/` back to the repo.
 
-Deriving URLs from real product tags means every URL resolves to a non-empty grid
-(no soft-404s). The exclusion list keeps colour/size/price filter tags out.
+Deriving 4th-tier URLs from real product tags means every one resolves to a non-empty
+grid (no soft-404s). The exclusion list keeps colour/size/price filter tags out.
+
+"Published" is checked against the **Online Store** publication when the token can read
+it; otherwise the build falls back to the app's current-publication flag and logs a
+warning (see scopes below).
 
 ## Repo layout
 
@@ -49,7 +56,8 @@ dist/                  generated output (committed by the Action)
 
 Repository **secrets**:
 - `SHOPIFY_STORE_DOMAIN` — admin host, e.g. `your-store.myshopify.com`
-- `SHOPIFY_ADMIN_TOKEN` — Admin API access token (custom app, scope **`read_products`**)
+- `SHOPIFY_ADMIN_TOKEN` — Admin API access token (custom app, scope **`read_products`**;
+  add **`read_publications`** too for an accurate Online Store "published" check)
 
 Repository **variables**:
 - `STOREFRONT_DOMAIN` — host for `<loc>`, e.g. `www.pepstores.com` (must match your live canonical host exactly, incl. `www`)
