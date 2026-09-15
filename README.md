@@ -85,42 +85,22 @@ Repository **secrets**:
 Repository **variables**:
 - `STOREFRONT_DOMAIN` — host for the page `<loc>` entries, e.g. `www.pepstores.com` (must match your live canonical host exactly, incl. `www`)
 - `SHOPIFY_API_VERSION` — e.g. `2025-07`
-- `SITEMAP_PUBLIC_BASE` — where the sitemap files are served (see Hosting). Project Pages
-  URL `https://ecomplete.github.io/ecom-collection-xml`, or a custom subdomain
-  `https://sitemaps.pepstores.com`.
 
-## Hosting (GitHub Pages)
+That's all that's needed. The workflow **generates the sitemap and commits it into this repo**
+(under `dist/`) — nothing is deployed or submitted anywhere.
 
-The workflow deploys `dist/` to GitHub Pages and also commits it back to the repo.
+## Later: hosting & submission (NOT set up yet)
 
-1. **Enable Pages:** repo **Settings → Pages → Build and deployment → Source = GitHub Actions**.
-2. **Set `SITEMAP_PUBLIC_BASE`** (repo variable) to the URL where the files will live:
-   - Project Pages: `https://ecomplete.github.io/ecom-collection-xml`
-   - Or a custom subdomain (recommended): `https://sitemaps.pepstores.com` — the build then
-     writes a `CNAME` file automatically. Point that subdomain at GitHub Pages with a DNS
-     `CNAME` record to `ecomplete.github.io`.
-   This matters: the page `<loc>` entries use `STOREFRONT_DOMAIN`, but the sitemap **index**
-   links to the shard files at `SITEMAP_PUBLIC_BASE`. Get this wrong and the index points nowhere.
-3. **Authorize the sitemap from the storefront** — add a `Sitemap:` line to the theme's
-   `robots.txt.liquid` so Google accepts a sitemap hosted off the storefront host:
+Right now the sitemap only lives in the repo. To actually serve it to search engines later,
+you'd host `dist/` somewhere (e.g. GitHub Pages), reference it from the theme's
+`robots.txt.liquid`, and submit it in Search Console. When you get there:
 
-   ```liquid
-   {%- comment -%} Custom level-4 sitemap {%- endcomment -%}
-   Sitemap: https://sitemaps.pepstores.com/sitemap-index.xml
-   ```
+- Set a `SITEMAP_PUBLIC_BASE` variable to the host serving the files — the sitemap **index**
+  then links shards there, while page `<loc>`s stay on `STOREFRONT_DOMAIN`. (The build already
+  supports this, plus writing `CNAME`/`.nojekyll` for a custom subdomain; it's just dormant
+  until you set that variable and add the deploy step.)
 
-   (Use whatever `SITEMAP_PUBLIC_BASE` you chose. In `robots.txt.liquid`, render the default
-   rules first, then append this line.)
-4. **Submit in Search Console** — add the `sitemap-index.xml` URL under the `pepstores.com`
-   property. A custom subdomain on the same registrable domain avoids cross-domain hassle; a
-   `*.github.io` host works too because it's authorized via `robots.txt`.
-
-**A subdomain is strongly recommended over the `github.io` URL** — same registrable domain as
-the store, cleaner in Search Console, and not tied to the GitHub org name.
-
-> Reminder: this only makes the sitemap *reachable*. Whether each page gets indexed still
-> depends on the page's own canonical/robots — which your theme + the SEO Tag Overrides
-> metaobject already control, and which this build mirrors.
+None of that is required to generate and keep the file in the repo.
 
 ## Run it
 
