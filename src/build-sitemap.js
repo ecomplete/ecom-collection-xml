@@ -12,7 +12,7 @@
 import { readFile, mkdir, writeFile, rm } from "node:fs/promises";
 import { gzipSync } from "node:zlib";
 import path from "node:path";
-import { fetchCollections } from "./shopify.js";
+import { fetchCollections, fetchSeoOverrides, overrideKey } from "./shopify.js";
 import { buildExcluder } from "./exclusions.js";
 import { handleize } from "./handleize.js";
 
@@ -45,6 +45,7 @@ async function main() {
   log(`Building sitemap for ${base}`);
   const collections = await fetchCollections(settings, log);
   log(`Published collections: ${collections.length}`);
+  const overrides = await fetchSeoOverrides(settings, log);
 
   // Build one group per collection: [comment, ...urlBlocks].
   collections.sort((a, b) => (a.handle < b.handle ? -1 : a.handle > b.handle ? 1 : 0));
@@ -52,6 +53,7 @@ async function main() {
   const seen = new Set();
   const groups = []; // { comment, blocks:[string], count:number }
   let collectionUrls = 0, tagUrls = 0, excludedCount = 0, qualifying = 0;
+  let noindexSkipped = 0, canonicalSkipped = 0;
   const excludedSample = new Set();
 
   for (const col of collections) {
@@ -78,6 +80,15 @@ async function main() {
         }
         const h = handleize(rawTag);
         if (!h) continue;
+
+        // Respect the SEO Tag Overrides metaobject: never list a page that
+        // de-indexes itself or canonicals elsewhere. Default (no entry) = index.
+        const ov = overrides.get(overrideKey(col.handle, rawTag));
+        if (ov) {
+          if (ov.noindex) { noindexSkipped++; continue; }
+          if (ov.canonicalOverride) { canonicalSkipped++; continue; }
+        }
+
         const loc = `${base}/collections/${col.handle}/${h}`;
         if (seen.has(loc)) continue;
         seen.add(loc);
@@ -96,7 +107,8 @@ async function main() {
 
   const totalUrls = collectionUrls + tagUrls;
   log(`URLs: ${totalUrls} (${collectionUrls} collections + ${tagUrls} 4th-tier). ` +
-      `Qualifying: ${qualifying}. Excluded tag-occurrences: ${excludedCount}.`);
+      `Qualifying: ${qualifying}. Excluded tags: ${excludedCount}. ` +
+      `Skipped noindex: ${noindexSkipped}, canonical-override: ${canonicalSkipped}.`);
 
   // Pack groups into shards without splitting a group (unless a single group exceeds the cap).
   const perFile = settings.sitemap.urlsPerFile || 45000;
@@ -144,6 +156,9 @@ async function main() {
     fourthTierUrls: tagUrls,
     totalUrls,
     shards: shardFiles.length,
+    seoOverridesLoaded: overrides.size,
+    skippedNoindex: noindexSkipped,
+    skippedCanonicalOverride: canonicalSkipped,
     excludedTagOccurrences: excludedCount,
     excludedSample: [...excludedSample].sort(),
   };

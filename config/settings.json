@@ -16,6 +16,19 @@
   "//publicationName": "Sales channel checked for 'published'. Needs read_publications scope; if unavailable, the build falls back to the app's current-publication check and logs a warning.",
   "publicationName": "Online Store",
 
+  "//seoOverrides": "The 'SEO Tag Overrides' metaobject controls per-page index/noindex (default = index). The build drops any 4th-tier URL whose entry is Noindex=true OR has a Canonical Override, so the sitemap never lists a page that de-indexes itself. Needs read_metaobjects scope. Verify type/field handles with `npm run discover`.",
+  "seoOverrides": {
+    "enabled": true,
+    "type": "seo_tag_overrides",
+    "onlyActiveStatus": true,
+    "fields": {
+      "targetCollection": "target_collection",
+      "targetTag": "target_tag",
+      "noindex": "noindex",
+      "canonicalOverride": "canonical_override"
+    }
+  },
+
   "sitemap": {
     "//urlsPerFile": "Max <url> entries per shard. Spec cap is 50000; 45000 leaves headroom.",
     "urlsPerFile": 45000,

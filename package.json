@@ -10,6 +10,7 @@
     "build": "node src/build-sitemap.js",
     "validate": "node src/validate.js",
     "build:mock": "SITEMAP_FETCH_MODE=mock node src/build-sitemap.js",
+    "discover": "node src/discover.js",
     "test": "node --test"
   },
   "license": "UNLICENSED",

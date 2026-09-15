@@ -18,10 +18,13 @@ Runs daily on GitHub Actions, commits the generated files back into the repo
    (`custom.collection_1st_tier/2nd/3rd`) — the "3rd-tier" collections — it also reads
    their product tags and turns each **non-excluded** tag into a 4th-tier URL
    `https://{STOREFRONT_DOMAIN}/collections/{handle}/{handleized-tag}`.
-3. Writes the sitemap **grouped**: each collection's own URL, with its 4th-tier URLs
+3. Applies the **SEO Tag Overrides** metaobject: drops any 4th-tier URL whose entry is
+   `Noindex = true` or has a `Canonical Override`, so the sitemap never lists a page that
+   de-indexes itself or points its canonical elsewhere. No entry = indexable (the default).
+4. Writes the sitemap **grouped**: each collection's own URL, with its 4th-tier URLs
    listed directly beneath it, preceded by a comment showing the tier breadcrumb.
-4. Deduplicates, shards (≤45k URLs/file, groups kept intact), writes a sitemap index.
-5. Validates the output, then commits `dist/` back to the repo.
+5. Deduplicates, shards (≤45k URLs/file, groups kept intact), writes a sitemap index.
+6. Validates the output, then commits `dist/` back to the repo.
 
 Deriving 4th-tier URLs from real product tags means every one resolves to a non-empty
 grid (no soft-404s). The exclusion list keeps colour/size/price filter tags out.
@@ -60,8 +63,9 @@ exchanges for a short-lived Admin API token on each run. The app and the store m
 
 1. In the **Dev Dashboard** (dev.shopify.com), create an app in your organization.
 2. Configure Admin API **access scopes**: `read_products` (required — covers collections,
-   their metafields, and product tags) and `read_publications` (recommended — for the
-   accurate Online Store "published" check).
+   their metafields, and product tags), `read_metaobjects` (required — reads the SEO Tag
+   Overrides for the noindex check), and `read_publications` (recommended — for the accurate
+   Online Store "published" check).
 3. **Install** the app on the PEP store.
 4. In the app's **Settings**, copy the **Client ID** and **Client secret**.
 
@@ -117,6 +121,24 @@ Edit `config/tag-exclusions.json`. Matching is on the **raw** tag, case-insensit
 
 Each run prints how many tag-occurrences were excluded and a sample, so new filter-tag
 families are easy to spot. `dist/report.json` records the same.
+
+The exclusion list and the SEO Tag Overrides metaobject do different jobs: the exclusion
+list removes tags that should never be a 4th-tier page (colour/size/price facets); the
+metaobject removes specific real category pages the SEO team set to `Noindex`.
+
+## Verify the SEO Overrides config
+
+`config/settings.json → seoOverrides` assumes the metaobject `type` is `seo_tag_overrides`
+with fields `target_collection`, `target_tag`, `noindex`, `canonical_override`. Confirm the
+real handles against the store:
+
+```bash
+npm run discover   # prints every metaobject type and its field keys
+```
+
+If they differ, update `seoOverrides.type` / `seoOverrides.fields`. A build that logs
+`SEO overrides loaded: 0` while entries exist means the handles are wrong — fix before
+relying on the noindex filter.
 
 ## Validation gate
 

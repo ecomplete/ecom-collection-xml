@@ -10,6 +10,7 @@
 // Only qualifying collections (all three tier metafields set) carry productTags.
 
 import { readFile } from "node:fs/promises";
+import { handleize } from "./handleize.js";
 
 const API_VERSION = process.env.SHOPIFY_API_VERSION || "2025-07";
 
@@ -300,6 +301,104 @@ async function runMock(settings) {
   return out;
 }
 
+// ---- SEO Tag Overrides metaobject -------------------------------------------
+// Returns a Map keyed "<collectionHandle>--<tagHandle>" -> { noindex, canonicalOverride }.
+// Default (no entry) = indexable. The build drops noindex / canonical-overridden URLs.
+
+function fieldVal(node, key) {
+  const f = (node.fields || []).find((x) => x.key === key);
+  return f ? f.value : undefined;
+}
+
+function overrideKey(collectionValue, tagValue) {
+  return `${handleize(collectionValue)}--${handleize(tagValue)}`;
+}
+
+function normalizeOverride(node, settings) {
+  const F = settings.seoOverrides.fields;
+  const col = fieldVal(node, F.targetCollection);
+  const tag = fieldVal(node, F.targetTag);
+  if (!col || !tag) return null;
+  const noindexRaw = fieldVal(node, F.noindex);
+  const canonical = (fieldVal(node, F.canonicalOverride) || "").trim();
+  return {
+    key: overrideKey(col, tag),
+    noindex: noindexRaw === "true" || noindexRaw === true,
+    canonicalOverride: canonical,
+  };
+}
+
+async function runMockOverrides(settings) {
+  const raw = JSON.parse(await readFile(new URL("../test/mock-data.json", import.meta.url), "utf8"));
+  const map = new Map();
+  for (const e of raw.seoOverrides || []) {
+    if (settings.seoOverrides.onlyActiveStatus && e.status && e.status !== "ACTIVE") continue;
+    const node = { fields: Object.entries(e).filter(([k]) => k !== "status").map(([key, value]) => ({ key, value })) };
+    const o = normalizeOverride(node, settings);
+    if (o) map.set(o.key, { noindex: o.noindex, canonicalOverride: o.canonicalOverride });
+  }
+  return map;
+}
+
+export async function fetchSeoOverrides(settings, log = () => {}) {
+  if (!settings.seoOverrides?.enabled) return new Map();
+  const mode = process.env.SITEMAP_FETCH_MODE || "bulk";
+  if (mode === "mock") return runMockOverrides(settings);
+
+  await ensureAccessToken(log);
+  const type = settings.seoOverrides.type;
+  const map = new Map();
+  let after = null;
+  for (;;) {
+    const q = `
+      query ($type: String!, $after: String) {
+        metaobjects(type: $type, first: 250, after: $after) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            handle
+            capabilities { publishable { status } }
+            fields { key value }
+          }
+        }
+      }`;
+    const page = await gql(q, { type, after });
+    const conn = page.data.metaobjects;
+    for (const node of conn.nodes) {
+      if (settings.seoOverrides.onlyActiveStatus) {
+        const status = node.capabilities?.publishable?.status;
+        if (status && status !== "ACTIVE") continue;
+      }
+      const o = normalizeOverride(node, settings);
+      if (o) map.set(o.key, { noindex: o.noindex, canonicalOverride: o.canonicalOverride });
+    }
+    if (!conn.pageInfo.hasNextPage) break;
+    after = conn.pageInfo.endCursor;
+  }
+  log(`SEO overrides loaded: ${map.size} entr${map.size === 1 ? "y" : "ies"} (type "${type}").`);
+  if (map.size === 0) {
+    log(`WARNING: 0 SEO override entries. Check seoOverrides.type/field handles with \`npm run discover\` ` +
+        `and the read_metaobjects scope — otherwise noindex pages may be included.`);
+  }
+  return map;
+}
+
+// ---- discovery (npm run discover) -------------------------------------------
+// Prints metaobject definitions (types + field keys) so you can confirm config.
+
+export async function discoverMetaobjects(log = console.log) {
+  await ensureAccessToken(log);
+  const r = await gql(`
+    {
+      metaobjectDefinitions(first: 50) {
+        nodes { type name fieldDefinitions { key name type { name } } }
+      }
+    }`);
+  for (const d of r.data.metaobjectDefinitions.nodes) {
+    log(`\nType: ${d.type}   (name: "${d.name}")`);
+    for (const f of d.fieldDefinitions) log(`  - ${f.key}  [${f.type.name}]  "${f.name}"`);
+  }
+}
+
 // ---- entry -------------------------------------------------------------------
 
 export async function fetchCollections(settings, log = () => {}) {
@@ -311,4 +410,5 @@ export async function fetchCollections(settings, log = () => {}) {
   return runBulk(settings, log);
 }
 
+export { overrideKey };
 export default fetchCollections;

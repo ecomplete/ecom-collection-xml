@@ -65,5 +65,23 @@
         { "status": "ACTIVE", "publishedOnCurrentPublication": true, "tags": ["Tote"] }
       ]
     }
+  ],
+
+  "//seoOverrides": "Mirrors 'SEO Tag Overrides' metaobject entries. Used by SITEMAP_FETCH_MODE=mock. Default (no entry) = index.",
+  "seoOverrides": [
+    {
+      "status": "ACTIVE",
+      "target_collection": "women-shoes-boots-heels",
+      "target_tag": "Men's",
+      "noindex": "true",
+      "canonical_override": ""
+    },
+    {
+      "status": "ACTIVE",
+      "target_collection": "men-clothing-jackets",
+      "target_tag": "Puffer",
+      "noindex": "false",
+      "canonical_override": "https://www.pepstores.com/collections/men-clothing-jackets"
+    }
   ]
 }
