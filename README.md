@@ -50,21 +50,37 @@ test/
 dist/                  generated output (committed by the Action)
 ```
 
+## Get Shopify credentials (current method)
+
+Shopify no longer lets you create admin custom apps from **Settings → Apps → Develop apps**
+(existing ones still work). New apps are made in the **Dev Dashboard** and authenticate with
+the **client_credentials** grant — the app has a Client ID + Client secret, which the build
+exchanges for a short-lived Admin API token on each run. The app and the store must be in the
+**same Shopify organization**.
+
+1. In the **Dev Dashboard** (dev.shopify.com), create an app in your organization.
+2. Configure Admin API **access scopes**: `read_products` (required — covers collections,
+   their metafields, and product tags) and `read_publications` (recommended — for the
+   accurate Online Store "published" check).
+3. **Install** the app on the PEP store.
+4. In the app's **Settings**, copy the **Client ID** and **Client secret**.
+
+(If you already have a legacy admin-created custom app, its static `shpat_...` token still
+works — set `SHOPIFY_ADMIN_TOKEN` instead of the client id/secret and the exchange is skipped.)
+
 ## Configure on GitHub
 
 **Settings → Secrets and variables → Actions**
 
 Repository **secrets**:
 - `SHOPIFY_STORE_DOMAIN` — admin host, e.g. `your-store.myshopify.com`
-- `SHOPIFY_ADMIN_TOKEN` — Admin API access token (custom app, scope **`read_products`**;
-  add **`read_publications`** too for an accurate Online Store "published" check)
+- `SHOPIFY_CLIENT_ID` — Dev Dashboard app Client ID
+- `SHOPIFY_CLIENT_SECRET` — Dev Dashboard app Client secret
+- *(or, legacy)* `SHOPIFY_ADMIN_TOKEN` — static `shpat_...` token, used instead of the id/secret
 
 Repository **variables**:
 - `STOREFRONT_DOMAIN` — host for `<loc>`, e.g. `www.pepstores.com` (must match your live canonical host exactly, incl. `www`)
 - `SHOPIFY_API_VERSION` — e.g. `2025-07`
-
-Create the token via **Settings → Apps and sales channels → Develop apps → Create an app**,
-grant Admin API scope `read_products`, install, and copy the Admin API access token.
 
 ## Run it
 

@@ -19,10 +19,39 @@ function adminEndpoint() {
   return `https://${domain}/admin/api/${API_VERSION}/graphql.json`;
 }
 
+// Auth. Two supported credential styles:
+//   1. Dev Dashboard app (current): SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET are
+//      exchanged for a short-lived Admin API token via the client_credentials grant
+//      each run. Requires the app and store to be in the same Shopify organization.
+//   2. Legacy static token: SHOPIFY_ADMIN_TOKEN (shpat_...) used as-is, if you still
+//      have an existing admin-created custom app (Shopify no longer lets you make new ones).
+let ACCESS_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN || null;
+
+async function ensureAccessToken(log = () => {}) {
+  if (ACCESS_TOKEN) return ACCESS_TOKEN;
+  const id = process.env.SHOPIFY_CLIENT_ID;
+  const secret = process.env.SHOPIFY_CLIENT_SECRET;
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+  if (!id || !secret) {
+    throw new Error("Provide SHOPIFY_ADMIN_TOKEN, or SHOPIFY_CLIENT_ID + SHOPIFY_CLIENT_SECRET (client_credentials).");
+  }
+  if (!domain) throw new Error("SHOPIFY_STORE_DOMAIN is required.");
+  const res = await fetch(`https://${domain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ client_id: id, client_secret: secret, grant_type: "client_credentials" }),
+  });
+  if (!res.ok) throw new Error(`Token exchange failed (HTTP ${res.status}): ${await res.text()}`);
+  const json = await res.json();
+  ACCESS_TOKEN = json.access_token;
+  if (!ACCESS_TOKEN) throw new Error(`Token exchange returned no access_token: ${JSON.stringify(json)}`);
+  log(`Obtained Admin API token via client_credentials (expires in ~${Math.round((json.expires_in || 0) / 3600)}h).`);
+  return ACCESS_TOKEN;
+}
+
 function authHeaders() {
-  const token = process.env.SHOPIFY_ADMIN_TOKEN;
-  if (!token) throw new Error("SHOPIFY_ADMIN_TOKEN is required.");
-  return { "X-Shopify-Access-Token": token, "Content-Type": "application/json" };
+  if (!ACCESS_TOKEN) throw new Error("Access token not initialized — call ensureAccessToken() first.");
+  return { "X-Shopify-Access-Token": ACCESS_TOKEN, "Content-Type": "application/json" };
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -277,6 +306,7 @@ export async function fetchCollections(settings, log = () => {}) {
   const mode = process.env.SITEMAP_FETCH_MODE || "bulk";
   log(`Fetch mode: ${mode}`);
   if (mode === "mock") return runMock(settings);
+  await ensureAccessToken(log);
   if (mode === "paginated") return runPaginated(settings, log);
   return runBulk(settings, log);
 }
