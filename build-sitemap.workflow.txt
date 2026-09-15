@@ -1,0 +1,83 @@
+name: Build level-4 sitemap
+
+on:
+  schedule:
+    # 01:00 UTC = 03:00 SAST. GitHub cron is UTC and may lag a few minutes.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Fetch mode"
+        type: choice
+        default: bulk
+        options: [bulk, paginated, mock]
+      drift_max_pct:
+        description: "Max % URL-count swing before validation fails (0 = disable)"
+        default: "25"
+
+permissions:
+  contents: write   # commit generated dist/ back to the repo
+  pages: write      # deploy to GitHub Pages
+  id-token: write   # required by actions/deploy-pages
+
+concurrency:
+  group: build-sitemap
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install deps (if any)
+        run: npm ci || echo "no lockfile / no deps — continuing"
+
+      - name: Build sitemap
+        env:
+          STOREFRONT_DOMAIN: ${{ vars.STOREFRONT_DOMAIN }}
+          # Host where the sitemap FILES are served (Pages URL or custom subdomain).
+          SITEMAP_PUBLIC_BASE: ${{ vars.SITEMAP_PUBLIC_BASE }}
+          SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
+          # Dev Dashboard app (current): client_credentials exchange each run.
+          SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
+          SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          # Legacy static token (optional; used as-is if set instead of client id/secret).
+          SHOPIFY_ADMIN_TOKEN: ${{ secrets.SHOPIFY_ADMIN_TOKEN }}
+          SHOPIFY_API_VERSION: ${{ vars.SHOPIFY_API_VERSION }}
+          SITEMAP_FETCH_MODE: ${{ github.event.inputs.mode || 'bulk' }}
+          OUTPUT_DIR: dist
+        run: node src/build-sitemap.js
+
+      - name: Validate
+        env:
+          DRIFT_MAX_PCT: ${{ github.event.inputs.drift_max_pct || '25' }}
+        run: node src/validate.js dist
+
+      - name: Commit generated sitemap back to repo
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist .last-count.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: regenerate level-4 sitemap [skip ci]"
+            git push
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

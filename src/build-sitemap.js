@@ -39,10 +39,15 @@ async function main() {
 
   const storefront = (process.env.STOREFRONT_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
   if (!storefront) throw new Error("STOREFRONT_DOMAIN is required (e.g. www.pepstores.com).");
-  const base = `https://${storefront}`;
+  const base = `https://${storefront}`; // used for the page <loc> entries (the real storefront pages)
+
+  // Where the sitemap FILES are served (the host of this repo's Pages site or a custom
+  // subdomain). Used only for the <loc> of each shard inside the sitemap index. Defaults
+  // to the storefront so local/mock output stays sane; set it for real deploys.
+  const publicBase = (process.env.SITEMAP_PUBLIC_BASE || base).replace(/^https?:\/\//, "https://").replace(/\/+$/, "");
   const outDir = process.env.OUTPUT_DIR || "dist";
 
-  log(`Building sitemap for ${base}`);
+  log(`Building sitemap for ${base}  (files served from ${publicBase})`);
   const collections = await fetchCollections(settings, log);
   log(`Published collections: ${collections.length}`);
   const overrides = await fetchSeoOverrides(settings, log);
@@ -142,10 +147,23 @@ async function main() {
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
     shardFiles.map((f) =>
-      `  <sitemap>\n    <loc>${xmlEscape(`${base}/${f}`)}</loc>\n    <lastmod>${now}</lastmod>\n  </sitemap>`
+      `  <sitemap>\n    <loc>${xmlEscape(`${publicBase}/${f}`)}</loc>\n    <lastmod>${now}</lastmod>\n  </sitemap>`
     ).join("\n") +
     `\n</sitemapindex>\n`;
   await writeFile(path.join(outDir, settings.sitemap.indexFileName), indexBody, "utf8");
+
+  // GitHub Pages: serve files verbatim (no Jekyll processing).
+  await writeFile(path.join(outDir, ".nojekyll"), "", "utf8");
+
+  // Custom domain (CNAME) for GitHub Pages, when the sitemap host is a real subdomain.
+  const pubEnv = process.env.SITEMAP_PUBLIC_BASE || "";
+  if (pubEnv) {
+    const host = pubEnv.replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    if (host && !host.endsWith("github.io") && host !== storefront) {
+      await writeFile(path.join(outDir, "CNAME"), host + "\n", "utf8");
+      log(`Wrote CNAME: ${host}`);
+    }
+  }
 
   const report = {
     generatedAt: now,
