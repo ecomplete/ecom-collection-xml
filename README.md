@@ -142,6 +142,23 @@ The exclusion list and the SEO Tag Overrides metaobject do different jobs: the e
 list removes tags that should never be a 4th-tier page (colour/size/price facets); the
 metaobject removes specific real category pages the SEO team set to `Noindex`.
 
+### Excluding whole collections
+
+To drop entire collections (their own URL *and* all their 4th-tier URLs), edit
+`config/settings.json → collectionExclusions`. Matching is on the collection **handle**,
+case-insensitive, with the same `exact` / `prefix` / `regex` shape:
+
+```jsonc
+"collectionExclusions": {
+  "exact": ["clearance"],
+  "prefix": ["sale"],          // drops sale, sale-women, sale-mens, ...
+  "regex": ["^temp-"]
+}
+```
+
+`prefix: "sale"` also matches a handle like `salexyz`; use `"sale-"` or `regex: "^sale(-|$)"`
+if you need it stricter. Each run reports how many collections were excluded.
+
 ## Verify the SEO Overrides config
 
 `config/settings.json → seoOverrides` assumes the metaobject `type` is `seo_tag_overrides`

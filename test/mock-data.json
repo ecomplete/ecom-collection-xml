@@ -54,6 +54,14 @@
       ]
     },
     {
+      "id": "gid://shopify/Collection/5",
+      "handle": "sale-womens",
+      "updatedAt": "2026-09-01T00:00:00Z",
+      "publishedOnCurrentPublication": true,
+      "tier1": { "value": "" }, "tier2": { "value": "" }, "tier3": { "value": "" },
+      "products": []
+    },
+    {
       "id": "gid://shopify/Collection/4",
       "handle": "unpublished-tier-collection",
       "updatedAt": "2026-09-01T00:00:00Z",
