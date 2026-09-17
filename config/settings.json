@@ -16,6 +16,13 @@
   "//publicationName": "Sales channel checked for 'published'. Needs read_publications scope; if unavailable, the build falls back to the app's current-publication check and logs a warning.",
   "publicationName": "Online Store",
 
+  "//collectionExclusions": "Collections whose HANDLE matches are dropped entirely (their own URL and all their 4th-tier URLs). Matching is on the handle, case-insensitive. prefix 'sale' drops sale, sale-women, ... ; use 'sale-' or regex '^sale(-|$)' to be stricter.",
+  "collectionExclusions": {
+    "exact": [],
+    "prefix": ["sale"],
+    "regex": []
+  },
+
   "//seoOverrides": "The 'SEO Tag Overrides' metaobject controls per-page index/noindex (default = index). The build drops any 4th-tier URL whose entry is Noindex=true OR has a Canonical Override, so the sitemap never lists a page that de-indexes itself. Needs read_metaobjects scope. Verify type/field handles with `npm run discover`.",
   "seoOverrides": {
     "enabled": true,

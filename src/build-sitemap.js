@@ -36,6 +36,7 @@ async function main() {
   const settings = await loadJson("../config/settings.json");
   const exclusionsCfg = await loadJson("../config/tag-exclusions.json");
   const isExcluded = buildExcluder(exclusionsCfg);
+  const isCollectionExcluded = buildExcluder(settings.collectionExclusions || {});
 
   const storefront = (process.env.STOREFRONT_DOMAIN || "").replace(/^https?:\/\//, "").replace(/\/+$/, "");
   if (!storefront) throw new Error("STOREFRONT_DOMAIN is required (e.g. www.pepstores.com).");
@@ -58,10 +59,13 @@ async function main() {
   const seen = new Set();
   const groups = []; // { comment, blocks:[string], count:number }
   let collectionUrls = 0, tagUrls = 0, excludedCount = 0, qualifying = 0;
-  let noindexSkipped = 0, canonicalSkipped = 0;
+  let noindexSkipped = 0, canonicalSkipped = 0, excludedCollections = 0;
   const excludedSample = new Set();
 
   for (const col of collections) {
+    // Whole-collection exclusion by handle (drops its own URL and all 4th-tier URLs).
+    if (isCollectionExcluded(col.handle)) { excludedCollections++; continue; }
+
     const lastmod = col.updatedAt || new Date().toISOString();
     const blocks = [];
 
@@ -112,7 +116,7 @@ async function main() {
 
   const totalUrls = collectionUrls + tagUrls;
   log(`URLs: ${totalUrls} (${collectionUrls} collections + ${tagUrls} 4th-tier). ` +
-      `Qualifying: ${qualifying}. Excluded tags: ${excludedCount}. ` +
+      `Qualifying: ${qualifying}. Excluded collections: ${excludedCollections}. Excluded tags: ${excludedCount}. ` +
       `Skipped noindex: ${noindexSkipped}, canonical-override: ${canonicalSkipped}.`);
 
   // Pack groups into shards without splitting a group (unless a single group exceeds the cap).
@@ -169,6 +173,7 @@ async function main() {
     generatedAt: now,
     storefront: base,
     publishedCollections: collections.length,
+    excludedCollections,
     qualifyingCollections: qualifying,
     collectionUrls,
     fourthTierUrls: tagUrls,
