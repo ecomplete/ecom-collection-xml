@@ -1,22 +1,15 @@
 {
-  "generatedAt": "2026-09-15T14:12:54.394Z",
-  "storefront": "https://www.pepstores.com",
-  "publishedCollections": 5,
-  "qualifyingCollections": 2,
-  "collectionUrls": 5,
-  "fourthTierUrls": 4,
-  "totalUrls": 9,
+  "generatedAt": "2026-09-17T08:50:59.399Z",
+  "storefront": "https://pep-ecom-qa.myshopify.com",
+  "publishedCollections": 467,
+  "qualifyingCollections": 275,
+  "collectionUrls": 467,
+  "fourthTierUrls": 796,
+  "totalUrls": 1263,
   "shards": 1,
-  "seoOverridesLoaded": 2,
-  "skippedNoindex": 1,
-  "skippedCanonicalOverride": 1,
-  "excludedTagOccurrences": 6,
-  "excludedSample": [
-    "42",
-    "R199",
-    "Sale",
-    "Size:6",
-    "brand:Reebok",
-    "colour:Red"
-  ]
+  "seoOverridesLoaded": 4,
+  "skippedNoindex": 0,
+  "skippedCanonicalOverride": 0,
+  "excludedTagOccurrences": 0,
+  "excludedSample": []
 }
