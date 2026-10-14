@@ -26,9 +26,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -52,7 +52,7 @@ jobs:
         run: node src/validate.js dist
 
       - name: Upload as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: level4-sitemap
           path: dist/
@@ -61,7 +61,8 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dist .last-count.json
+          git add dist
+          [ -f .last-count.json ] && git add .last-count.json || echo ".last-count.json not found, skipping"
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
